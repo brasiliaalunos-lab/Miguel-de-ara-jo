@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Jogo de Futebol 2D - Gol do Jogador 1</title>
+  <!-- Tailwind CSS para estilização UI rápida e responsiva -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome para ícones nos botões -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap');
+    
+    * {
+      font-family: 'Outfit', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    body {
+      background: radial-gradient(circle at center, #1b2838 0%, #0d131a 100%);
+      overflow: hidden;
+    }
+
+    /* Efeito de brilho para placar */
+    .glow-blue {
+      text-shadow: 0 0 12px rgba(59, 130, 246, 0.8);
+    }
+    .glow-red {
+      text-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+    }
+    .glow-gold {
+      text-shadow: 0 0 18px rgba(234, 179, 8, 0.9);
+    }
+
+    /* Animação do Banner de Gol */
+    @keyframes goalBounce {
+      0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+      50% { transform: scale(1.1) rotate(3deg); opacity: 1; }
+      70% { transform: scale(0.95) rotate(-1deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    .animate-goal {
+      animation: goalBounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    /* Botões Virtuais Touch */
+    .dpad-btn, .action-btn {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.2);
+      transition: transform 0.08s ease, background-color 0.1s ease;
+    }
+
+    .dpad-btn:active, .action-btn:active {
+      transform: scale(0.92);
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    /* Estilização Customizada da Canvas */
+    canvas {
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 0 4px rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between items-center p-2 md:p-4 text-white overflow-hidden select-none">
+
+  <!-- Header & Placar Superior -->
+  <header class="w-full max-w-4xl flex items-center justify-between bg-gray-900/80 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-gray-700/50 shadow-2xl z-20 my-1">
+    
+    <!-- Time 1 (Jogador 1) -->
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center font-black text-xl shadow-lg shadow-blue-500/40">
+        1
+      </div>
+      <div class="hidden sm:block">
+        <h2 class="font-extrabold text-blue-400 text-sm md:text-base leading-tight">JOGADOR 1</h2>
+        <p class="text-xs text-gray-400 font-semibold">Time Azul</p>
+      </div>
+    </div>
+
+    <!-- Placar Central -->
+    <div class="flex items-center gap-3 bg-black/40 px-5 py-1.5 rounded-xl border border-gray-800">
+      <span id="score1" class="text-3xl md:text-4xl font-black text-blue-500 glow-blue">0</span>
+      <span class="text-lg md:text-xl font-black text-gray-500">:</span>
+      <span id="score2" class="text-3xl md:text-4xl font-black text-red-500 glow-red">0</span>
+    </div>
+
+    <!-- Time 2 (Rival) -->
+    <div class="flex items-center gap-3">
+      <div class="hidden sm:block text-right">
+        <h2 class="font-extrabold text-red-400 text-sm md:text-base leading-tight">RIVAL / CPU</h2>
+        <p class="text-xs text-gray-400 font-semibold">Time Vermelho</p>
+      </div>
+      <div class="w-10 h-10 md:w-12 md:h-12 rounded-full bg-red-600 border-2 border-white flex items-center justify-center font-black text-xl shadow-lg shadow-red-500/40">
+        2
+      </div>
+    </div>
+
+    <!-- Controles Utilitários (Som e Reinício) -->
+    <div class="flex items-center gap-2">
+      <button id="audioBtn" class="w-9 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-600 flex items-center justify-center text-gray-300 hover:text-white transition">
+        <i class="fas fa-volume-up" id="audioIcon"></i>
+      </button>
+      <button id="resetBtn" class="w-9 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-600 flex items-center justify-center text-gray-300 hover:text-white transition" title="Reiniciar Partida">
+        <i class="fas fa-redo-alt"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Área Principal do Jogo (Canvas) -->
+  <main class="relative flex-1 w-full max-w-5xl flex items-center justify-center min-h-0 my-1">
+    
+    <!-- Canvas de Futebol -->
+    <canvas id="gameCanvas" class="w-full h-full max-h-[75vh] object-contain"></canvas>
+
+    <!-- Overlay / Tela de Gol -->
+    <div id="goalOverlay" class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center opacity-0 transition-opacity duration-300 z-30">
+      <div id="goalBanner" class="bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-500 text-black px-8 py-4 md:px-14 md:py-6 rounded-3xl shadow-2xl border-4 border-white flex flex-col items-center">
+        <span class="text-4xl md:text-7xl font-black tracking-wider uppercase glow-gold text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]">
+          GOOOOOOL!
+        </span>
+        <span class="text-lg md:text-2xl font-black text-blue-950 mt-1 uppercase tracking-widest">
+          JOGADOR 1 MARCOU!
+        </span>
+      </div>
+    </div>
+
+    <!-- Banner Inicial / Instruções -->
+    <div id="startBanner" class="absolute inset-0 bg-black/70 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center z-40 p-6 text-center">
+      <div class="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center text-4xl mb-4 shadow-xl border-4 border-white">
+        ⚽
+      </div>
+      <h1 class="text-3xl md:text-5xl font-black mb-2 text-white">FUTETO 2D - JOGADOR 1</h1>
+      <p class="text-gray-300 max-w-md mb-6 text-sm md:text-base">
+        Conduza a bola com o <strong class="text-blue-400">Jogador 1 (Azul)</strong>, dribule o defensor vermelho e marque quantos gols puder no gol da direita!
+      </p>
+
+      <div class="grid grid-cols-2 gap-4 text-xs md:text-sm text-left mb-6 bg-gray-900/80 p-4 rounded-xl border border-gray-700">
+        <div>
+          <span class="text-yellow-400 font-bold block mb-1"><i class="fas fa-keyboard mr-1"></i> Teclado:</span>
+          • <strong>WASD / Setas:</strong> Mover Jogador<br>
+          • <strong>Espaço:</strong> Chutar Forte<br>
+          • <strong>K / Shift:</strong> Passe Curto
+        </div>
+        <div>
+          <span class="text-yellow-400 font-bold block mb-1"><i class="fas fa-mobile-alt mr-1"></i> Touch:</span>
+          • Use o D-Pad virtual à esquerda<br>
+          • Botões de Chute/Passe à direita
+        </div>
+      </div>
+
+      <button id="startGameBtn" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xl px-10 py-4 rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition border-2 border-blue-400">
+        INICIAR PARTIDA <i class="fas fa-play ml-2 text-lg"></i>
+      </button>
+    </div>
+  </main>
+
+  <!-- Controles Virtuais Touch (Exibidos em telas menores/touch) -->
+  <footer class="w-full max-w-4xl flex items-center justify-between px-2 py-1 z-20 md:hidden">
+    
+    <!-- D-Pad Direcional -->
+    <div class="relative w-36 h-36 flex items-center justify-center">
+      <button id="btnUp" class="dpad-btn absolute top-0 w-12 h-12 rounded-xl flex items-center justify-center text-xl text-white">
+        <i class="fas fa-chevron-up"></i>
+      </button>
+      <button id="btnDown" class="dpad-btn absolute bottom-0 w-12 h-12 rounded-xl flex items-center justify-center text-xl text-white">
+        <i class="fas fa-chevron-down"></i>
+      </button>
+      <button id="btnLeft" class="dpad-btn absolute left-0 w-12 h-12 rounded-xl flex items-center justify-center text-xl text-white">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <button id="btnRight" class="dpad-btn absolute right-0 w-12 h-12 rounded-xl flex items-center justify-center text-xl text-white">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+
+    <!-- Botões de Ação (Chute e Passe) -->
+    <div class="flex gap-3 items-center">
+      <button id="btnPass" class="action-btn w-16 h-16 rounded-full bg-emerald-600/80 text-white font-bold flex flex-col items-center justify-center text-xs border border-emerald-400">
+        <i class="fas fa-shoe-prints text-lg mb-0.5"></i>
+        PASSE
+      </button>
+      <button id="btnKick" class="action-btn w-20 h-20 rounded-full bg-amber-500/80 text-white font-black flex flex-col items-center justify-center text-sm border-2 border-amber-300">
+        <i class="fas fa-bullseye text-xl mb-0.5"></i>
+        CHUTE
+      </button>
+    </div>
+  </footer>
+
+  <!-- Lógica Principal do Jogo -->
+  <script>
+    /**
+     * SINTETIZADOR DE ÁUDIO WEB AUDIO API
+     */
+    class SoundManager {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+      }
+
+      // Apito do Juiz
+      playWhistle() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(2500, now);
+        osc.frequency.exponentialRampToValueAtTime(1800, now + 0.15);
+        osc.frequency.setValueAtTime(2600, now + 0.16);
+        osc.frequency.exponentialRampToValueAtTime(2000, now + 0.4);
+
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.4);
+      }
+
+      // Som do Chute
+      playKick() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
+
+        gain.gain.setValueAtTime(0.6, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.12);
+      }
+
+      // Som de Gol + Torcida comemorando
+      playGoalSound() {
+        if (this.muted || !this.ctx) return;
+        
+        // Apito triplo
+        this.playWhistle();
+
+        // Ruído de Torcida (Sintetizado com White Noise)
+        const bufferSize = this.ctx.sampleRate * 2.5;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        // Filtro de tom da torcida
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 800;
+        filter.Q.value = 1.0;
+
+        const gain = this.ctx.createGain();
+        const now = this.ctx.currentTime;
+        gain.gain.setValueAtTime(0.01, now);
+        gain.gain.linearRampToValueAtTime(0.4, now + 0.3);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 2.5);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        noise.start(now);
+        noise.stop(now + 2.5);
+      }
+    }
+
+    const sound = new SoundManager();
+
+    /**
+     * CONFIGURAÇÕES E ESTADO DO JOGO
+     */
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Dimensões Virtuais do Campo (Resolução interna fixa para físicas perfeitas)
+    const FIELD_WIDTH = 1200;
+    const FIELD_HEIGHT = 700;
+
+    canvas.width = FIELD_WIDTH;
+    canvas.height = FIELD_HEIGHT;
+
+    // Placar
+    let score1 = 0;
+    let score2 = 0;
+    let gameActive = false;
+    let goalFreezeTimer = 0;
+
+    // Teclado e Estado de Controles
+    const keys = {};
+
+    // Efeitos de Confeti
+    let confettis = [];
+
+    // Definição da Baliza / Gol (Lado Direito)
+    const goalRight = {
+      x: FIELD_WIDTH - 50,
+      y: FIELD_HEIGHT / 2 - 100,
+      width: 45,
+      height: 200
+    };
+
+    // Definição da Baliza Esquerda (Defesa do P1)
+    const goalLeft = {
+      x: 5,
+      y: FIELD_HEIGHT / 2 - 100,
+      width: 45,
+      height: 200
+    };
+
+    // Jogador 1 (Herói - Time Azul)
+    const p1 = {
+      x: 250,
+      y: FIELD_HEIGHT / 2,
+      radius: 22,
+      speed: 5.5,
+      vx: 0,
+      vy: 0,
+      color: '#2563eb',
+      accentColor: '#60a5fa',
+      angle: 0
+    };
+
+    // Jogador 2 (Inimigo/Goleiro - Time Vermelho)
+    const p2 = {
+      x: FIELD_WIDTH - 150,
+      y: FIELD_HEIGHT / 2,
+      radius: 22,
+      speed: 3.8,
+      vx: 0,
+      vy: 0,
+      color: '#dc2626',
+      accentColor: '#f87171',
+      angle: Math.PI
+    };
+
+    // Bola de Futebol
+    const ball = {
+      x: FIELD_WIDTH / 2,
+      y: FIELD_HEIGHT / 2,
+      radius: 13,
+      vx: 0,
+      vy: 0,
+      friction: 0.982,
+      rotation: 0,
+      spin: 0
+    };
+
+    /**
+     * INICIALIZAÇÃO DE EVENTOS DE CONTROLE
+     */
+    window.addEventListener('keydown', (e) => {
+      sound.init();
+      keys[e.code] = true;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        kickBall(14); // Chute Forte
+      }
+      if (e.code === 'KeyK' || e.code === 'ShiftLeft') {
+        kickBall(8); // Passe Suave
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.code] = false;
+    });
+
+    // Mapeamento dos Botões Virtuais Touch
+    function setupTouchControls() {
+      const bindBtn = (id, code) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        const start = (e) => {
+          e.preventDefault();
+          sound.init();
+          keys[code] = true;
+        };
+        const end = (e) => {
+          e.preventDefault();
+          keys[code] = false;
+        };
+
+        el.addEventListener('touchstart', start, { passive: false });
+        el.addEventListener('touchend', end, { passive: false });
+        el.addEventListener('mousedown', start);
+        el.addEventListener('mouseup', end);
+      };
+
+      bindBtn('btnUp', 'ArrowUp');
+      bindBtn('btnDown', 'ArrowDown');
+      bindBtn('btnLeft', 'ArrowLeft');
+      bindBtn('btnRight', 'ArrowRight');
+
+      // Botões de Ação Chute/Passe
+      const kickBtn = document.getElementById('btnKick');
+      if (kickBtn) {
+        kickBtn.addEventListener('click', () => {
+          sound.init();
+          kickBall(14);
+        });
+      }
+
+      const passBtn = document.getElementById('btnPass');
+      if (passBtn) {
+        passBtn.addEventListener('click', () => {
+          sound.init();
+          kickBall(8);
+        });
+      }
+    }
+
+    setupTouchControls();
+
+    // Controle de Áudio Toggle
+    document.getElementById('audioBtn').addEventListener('click', () => {
+      sound.init();
+      sound.muted = !sound.muted;
+      const icon = document.getElementById('audioIcon');
+      icon.className = sound.muted ? 'fas fa-volume-mute text-red-400' : 'fas fa-volume-up text-gray-300';
+    });
+
+    // Reiniciar Botão
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      score1 = 0;
+      score2 = 0;
+      updateScoreboard();
+      resetPositions();
+      sound.playWhistle();
+    });
+
+    // Botão de Iniciar Jogo
+    document.getElementById('startGameBtn').addEventListener('click', () => {
+      sound.init();
+      document.getElementById('startBanner').classList.add('hidden');
+      gameActive = true;
+      sound.playWhistle();
+    });
+
+    /**
+     * MECÂNICA DE CHUTE E COLISÃO
+     */
+    function kickBall(force) {
+      if (!gameActive || goalFreezeTimer > 0) return;
+
+      const dx = ball.x - p1.x;
+      const dy = ball.y - p1.y;
+      const dist = Math.hypot(dx, dy);
+
+      // Pode chutar se estiver perto da bola
+      if (dist < p1.radius + ball.radius + 20) {
+        let angle = Math.atan2(dy, dx);
+        
+        // Se estiver muito em cima da bola, chuta na direção que o jogador está olhando
+        if (dist < 5) angle = p1.angle;
+
+        ball.vx = Math.cos(angle) * force;
+        ball.vy = Math.sin(angle) * force;
+        sound.playKick();
+      }
+    }
+
+    /**
+     * SISTEMA DE CONFETIS
+     */
+    function triggerConfetti() {
+      confettis = [];
+      const colors = ['#f59e0b', '#3b82f6', '#ef4444', '#10b981', '#ec4899', '#ffffff'];
+      for (let i = 0; i < 120; i++) {
+        confettis.push({
+          x: FIELD_WIDTH / 2,
+          y: FIELD_HEIGHT / 2,
+          vx: (Math.random() - 0.5) * 18,
+          vy: (Math.random() - 0.7) * 16,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          size: Math.random() * 8 + 4,
+          rotation: Math.random() * 360,
+          vRot: (Math.random() - 0.5) * 10
+        });
+      }
+    }
+
+    function updateAndDrawConfetti() {
+      confettis.forEach((c) => {
+        c.x += c.vx;
+        c.y += c.vy;
+        c.vy += 0.25; // Gravidade
+        c.rotation += c.vRot;
+
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate((c.rotation * Math.PI) / 180);
+        ctx.fillStyle = c.color;
+        ctx.fillRect(-c.size / 2, -c.size / 2, c.size, c.size);
+        ctx.restore();
+      });
+    }
+
+    /**
+     * RESETAR POSIÇÕES
+     */
+    function resetPositions() {
+      p1.x = 250;
+      p1.y = FIELD_HEIGHT / 2;
+      p1.vx = 0;
+      p1.vy = 0;
+
+      p2.x = FIELD_WIDTH - 200;
+      p2.y = FIELD_HEIGHT / 2;
+      p2.vx = 0;
+      p2.vy = 0;
+
+      ball.x = FIELD_WIDTH / 2;
+      ball.y = FIELD_HEIGHT / 2;
+      ball.vx = 0;
+      ball.vy = 0;
+    }
+
+    function updateScoreboard() {
+      document.getElementById('score1').textContent = score1;
+      document.getElementById('score2').textContent = score2;
+    }
+
+    /**
+     * IA SIMPLES DO DEFENSOR / GOLEIRO (TIME VERMELHO)
+     */
+    function updateAI() {
+      if (goalFreezeTimer > 0) return;
+
+      // O P2 tenta proteger o gol direito e interceptar a bola se estiver perto
+      let targetX = FIELD_WIDTH - 120;
+      let targetY = ball.y;
+
+      // Se a bola estiver na área de ataque dele, ele sai para rebater
+      if (ball.x > FIELD_WIDTH * 0.6) {
+        targetX = ball.x;
+      }
+
+      // Restringir área de movimento da IA para ser equilibrado
+      targetX = Math.max(FIELD_WIDTH * 0.55, Math.min(FIELD_WIDTH - 70, targetX));
+      targetY = Math.max(goalRight.y - 40, Math.min(goalRight.y + goalRight.height + 40, targetY));
+
+      const dx = targetX - p2.x;
+      const dy = targetY - p2.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > 5) {
+        p2.vx = (dx / dist) * p2.speed;
+        p2.vy = (dy / dist) * p2.speed;
+        p2.angle = Math.atan2(dy, dx);
+      } else {
+        p2.vx = 0;
+        p2.vy = 0;
+      }
+
+      p2.x += p2.vx;
+      p2.y += p2.vy;
+    }
+
+    /**
+     * LÓGICA ATUALIZAÇÃO FISICA DO JOGO
+     */
+    function update() {
+      if (!gameActive) return;
+
+      // Timer pós-gol
+      if (goalFreezeTimer > 0) {
+        goalFreezeTimer--;
+        if (goalFreezeTimer === 0) {
+          document.getElementById('goalOverlay').classList.add('opacity-0');
+          document.getElementById('goalBanner').classList.remove('animate-goal');
+          resetPositions();
+        }
+        return;
+      }
+
+      // --- MOVIMENTO DO JOGADOR 1 ---
+      p1.vx = 0;
+      p1.vy = 0;
+
+      if (keys['ArrowUp'] || keys['KeyW']) p1.vy = -p1.speed;
+      if (keys['ArrowDown'] || keys['KeyS']) p1.vy = p1.speed;
+      if (keys['ArrowLeft'] || keys['KeyA']) p1.vx = -p1.speed;
+      if (keys['ArrowRight'] || keys['KeyD']) p1.vx = p1.speed;
+
+      // Normalizar velocidade diagonal
+      if (p1.vx !== 0 && p1.vy !== 0) {
+        p1.vx *= 0.7071;
+        p1.vy *= 0.7071;
+      }
+
+      p1.x += p1.vx;
+      p1.y += p1.vy;
+
+      if (p1.vx !== 0 || p1.vy !== 0) {
+        p1.angle = Math.atan2(p1.vy, p1.vx);
+      }
+
+      // Limites de campo para o P1
+      p1.x = Math.max(p1.radius + 50, Math.min(FIELD_WIDTH - p1.radius - 50, p1.x));
+      p1.y = Math.max(p1.radius + 40, Math.min(FIELD_HEIGHT - p1.radius - 40, p1.y));
+
+      // Atualizar IA
+      updateAI();
+
+      // --- FISICA DA BOLA ---
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      // Aplicar Fricção
+      ball.vx *= ball.friction;
+      ball.vy *= ball.friction;
+
+      // Parar bola quando velocidade for insignificante
+      if (Math.hypot(ball.vx, ball.vy) < 0.05) {
+        ball.vx = 0;
+        ball.vy = 0;
+      }
+
+      // --- COLISÕES BOLA E JOGADORES ---
+      function handlePlayerBallCollision(p) {
+        const dx = ball.x - p.x;
+        const dy = ball.y - p.y;
+        const dist = Math.hypot(dx, dy);
+        const minDist = p.radius + ball.radius;
+
+        if (dist < minDist) {
+          const overlap = minDist - dist;
+          const angle = Math.atan2(dy, dx);
+
+          // Empurrar a bola
+          ball.x += Math.cos(angle) * overlap;
+          ball.y += Math.sin(angle) * overlap;
+
+          // Transferência de momento
+          ball.vx = Math.cos(angle) * 4.5 + p.vx * 0.8;
+          ball.vy = Math.sin(angle) * 4.5 + p.vy * 0.8;
+
+          sound.playKick();
+        }
+      }
+
+      handlePlayerBallCollision(p1);
+      handlePlayerBallCollision(p2);
+
+      // --- COLISÃO DA BOLA COM AS PAREDES / TRAVES ---
+      const topEdge = 40;
+      const bottomEdge = FIELD_HEIGHT - 40;
+      const leftEdge = 50;
+      const rightEdge = FIELD_WIDTH - 50;
+
+      // Rebound nas laterais Superior e Inferior
+      if (ball.y - ball.radius < topEdge) {
+        ball.y = topEdge + ball.radius;
+        ball.vy *= -0.7;
+      }
+      if (ball.y + ball.radius > bottomEdge) {
+        ball.y = bottomEdge - ball.radius;
+        ball.vy *= -0.7;
+      }
+
+      // Linhas de Fundo (Fora do Gol)
+      const inGoalRightY = ball.y > goalRight.y && ball.y < goalRight.y + goalRight.height;
+      const inGoalLeftY = ball.y > goalLeft.y && ball.y < goalLeft.y + goalLeft.height;
+
+      // Rebater na linha de fundo direita (fora do gol)
+      if (ball.x + ball.radius > rightEdge && !inGoalRightY) {
+        ball.x = rightEdge - ball.radius;
+        ball.vx *= -0.7;
+      }
+
+      // Rebater na linha de fundo esquerda (fora do gol)
+      if (ball.x - ball.radius < leftEdge && !inGoalLeftY) {
+        ball.x = leftEdge + ball.radius;
+        ball.vx *= -0.7;
+      }
+
+      // --- DETECÇÃO DE GOL! ---
+      // Gol do Jogador 1 (No Gol Direito)
+      if (ball.x - ball.radius > goalRight.x + 10 && inGoalRightY) {
+        score1++;
+        updateScoreboard();
+        triggerConfetti();
+        sound.playGoalSound();
+
+        goalFreezeTimer = 120; // 2 segundos congelados celebrando
+
+        const overlay = document.getElementById('goalOverlay');
+        const banner = document.getElementById('goalBanner');
+        overlay.classList.remove('opacity-0');
+        banner.classList.add('animate-goal');
+      }
+
+      // Gol Contra / Gol do Rival (No Gol Esquerdo)
+      if (ball.x + ball.radius < goalLeft.x + goalLeft.width - 10 && inGoalLeftY) {
+        score2++;
+        updateScoreboard();
+        sound.playWhistle();
+        goalFreezeTimer = 90;
+        resetPositions();
+      }
+    }
+
+    /**
+     * DESENHO / RENDERIZAÇÃO GRÁFICA DA CANVAS
+     */
+    function drawField() {
+      // Gramado Verde com Listras Vibrantes
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+      // Listras do Gramado
+      const stripeWidth = 80;
+      ctx.fillStyle = '#16a34a';
+      for (let i = 0; i < FIELD_WIDTH; i += stripeWidth * 2) {
+        ctx.fillRect(i, 0, stripeWidth, FIELD_HEIGHT);
+      }
+
+      // Margem/Borda Externa do Campo
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(0, 0, FIELD_WIDTH, 40);
+      ctx.fillRect(0, FIELD_HEIGHT - 40, FIELD_WIDTH, 40);
+      ctx.fillRect(0, 0, 50, FIELD_HEIGHT);
+      ctx.fillRect(FIELD_WIDTH - 50, 0, 50, FIELD_HEIGHT);
+
+      // Linhas Brancas do Campo
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.lineWidth = 5;
+
+      // Linha do Perímetro Retangular
+      ctx.strokeRect(50, 40, FIELD_WIDTH - 100, FIELD_HEIGHT - 80);
+
+      // Linha do Meio de Campo
+      ctx.beginPath();
+      ctx.moveTo(FIELD_WIDTH / 2, 40);
+      ctx.lineTo(FIELD_WIDTH / 2, FIELD_HEIGHT - 40);
+      ctx.stroke();
+
+      // Círculo Central
+      ctx.beginPath();
+      ctx.arc(FIELD_WIDTH / 2, FIELD_HEIGHT / 2, 90, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Ponto Central
+      ctx.beginPath();
+      ctx.arc(FIELD_WIDTH / 2, FIELD_HEIGHT / 2, 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+
+      // Áreas dos Gols (Pênalti)
+      // Grande Área Esquerda
+      ctx.strokeRect(50, FIELD_HEIGHT / 2 - 160, 160, 320);
+      // Pequena Área Esquerda
+      ctx.strokeRect(50, FIELD_HEIGHT / 2 - 80, 60, 160);
+
+      // Grande Área Direita
+      ctx.strokeRect(FIELD_WIDTH - 210, FIELD_HEIGHT / 2 - 160, 160, 320);
+      // Pequena Área Direita
+      ctx.strokeRect(FIELD_WIDTH - 110, FIELD_HEIGHT / 2 - 80, 60, 160);
+
+      // Desenhar Redes e Traves do Gol Direito
+      drawGoal(goalRight, true);
+      // Desenhar Redes e Traves do Gol Esquerdo
+      drawGoal(goalLeft, false);
+    }
+
+    function drawGoal(goal, isRight) {
+      // Fundo e Rede
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
+
+      // Padrão de Rede Cruzada
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 1.5;
+      const step = 12;
+
+      for (let x = goal.x; x <= goal.x + goal.width; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, goal.y);
+        ctx.lineTo(x, goal.y + goal.height);
+        ctx.stroke();
+      }
+      for (let y = goal.y; y <= goal.y + goal.height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(goal.x, y);
+        ctx.lineTo(goal.x + goal.width, y);
+        ctx.stroke();
+      }
+
+      // Moldura de Trave 3D (Postes)
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(goal.x, goal.y, goal.width, goal.height);
+    }
+
+    function drawPlayer(p, number) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+
+      // Sombra projetada no gramado
+      ctx.beginPath();
+      ctx.ellipse(0, 15, p.radius, p.radius * 0.5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.fill();
+
+      // Corpo principal do jogador
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Indicador de Direção / Chuteira
+      ctx.rotate(p.angle);
+      ctx.fillStyle = p.accentColor;
+      ctx.fillRect(p.radius - 2, -6, 8, 12); // Nariz/Indicador
+      ctx.rotate(-p.angle);
+
+      // Número da camisa
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 16px Outfit, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(number, 0, 1);
+
+      ctx.restore();
+    }
+
+    function drawBall() {
+      ctx.save();
+      ctx.translate(ball.x, ball.y);
+
+      // Sombra da Bola
+      ctx.beginPath();
+      ctx.ellipse(2, 8, ball.radius * 0.9, ball.radius * 0.4, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.fill();
+
+      // Esfera Branca
+      ctx.beginPath();
+      ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#1e293b';
+      ctx.stroke();
+
+      // Detalhes de gomos pretos da bola de futebol
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(0, 0, ball.radius * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Gomos secundários ao redor
+      for (let i = 0; i < 5; i++) {
+        const ang = (i * Math.PI * 2) / 5;
+        const bx = Math.cos(ang) * (ball.radius * 0.7);
+        const by = Math.sin(ang) * (ball.radius * 0.7);
+        ctx.beginPath();
+        ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    function draw() {
+      // Limpar Canvas
+      ctx.clearRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+      // Desenhar Campo e Marcações
+      drawField();
+
+      // Desenhar Jogador 1 (Azul) e Jogador 2 (Vermelho)
+      drawPlayer(p1, '1');
+      drawPlayer(p2, '2');
+
+      // Desenhar Bola de Futebol
+      drawBall();
+
+      // Efeitos Visuais (Confeti)
+      if (confettis.length > 0) {
+        updateAndDrawConfetti();
+      }
+    }
+
+    /**
+     * LOOP PRINCIPAL DO JOGO (GAME LOOP)
+     */
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Iniciar renderização do Loop
+    gameLoop();
+  </script>
+</body>
+</html>
